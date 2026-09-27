@@ -30,7 +30,28 @@ def handler(job):
             if len(response.content) > 32 * 1024 * 1024:
                 raise ValueError("Reference image exceeds 32 MiB")
             image["image"] = base64.b64encode(response.content).decode("ascii")
-    return official.handler(job)
+    result = official.handler(job)
+    images = result.get("images", []) if isinstance(result, dict) else []
+    grants = data.get("qwen21_output_uploads", [])
+    if not images:
+        return result
+    total = sum(len(image.get("data", "")) for image in images)
+    if total > 5 * 1024 * 1024 and len(grants) < len(images):
+        raise ValueError("Large PNG outputs require signed output upload URLs")
+    # Return small responses to RunPod. PNG bytes and transparency stay intact.
+    for index, image in enumerate(images):
+        if image.get("type") != "base64" or index >= len(grants):
+            continue
+        grant = grants[index]
+        put_url, get_url = grant["put_url"], grant["get_url"]
+        put, get = urlsplit(put_url), urlsplit(get_url)
+        if put.scheme != "https" or get.scheme != "https" or put.hostname != get.hostname or put.path != get.path:
+            raise ValueError("Output upload URLs must address the same HTTPS object")
+        blob = base64.b64decode(image["data"], validate=True)
+        response = requests.put(put_url, data=blob, headers={"Content-Type": "image/png"}, timeout=180)
+        response.raise_for_status()
+        image.update(type="url", data=get_url, url=get_url, size=len(blob), mime_type="image/png")
+    return result
 
 
 if __name__ == "__main__":
