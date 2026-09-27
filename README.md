@@ -8,7 +8,7 @@ The website keeps all four original editor JSON files and publishes API adaptati
 
 ## Deploy
 
-GitHub Actions publishes public images to `ghcr.io/mousekkkss/qwen21-comfy-worker`. Pin the published digest in RunPod. Configure an A40 (`AMPERE_48`) queue endpoint with 100 GB disk, min workers 0, max workers 1 and 120s idle timeout. The optional SeedVR2/VOSR2 nodes download their pinned upstream model files on first use.
+GitHub Actions publishes public images to `ghcr.io/mousekkkss/qwen21-comfy-worker`. Pin the published digest in RunPod. Configure an A40 (`AMPERE_48`) queue endpoint with 100 GB disk, min workers 0, max workers 1 and 120s idle timeout. The optional SeedVR2/VOSR2 nodes download their named upstream model files on first use.
 
 Website routing lives in `qwen21-endpoint-router.js` and the ignored `qwen21-endpoint.local.json`, reusing the API key from `local-runpod.config.json`. The frontend never receives the key. The endpoint's startup health can be checked with `input.mode = qwen21_health`, which returns the registered schemas of the required nodes. A health response does not replace a generation test.
 
@@ -21,4 +21,6 @@ curl -X POST 'https://api.runpod.ai/v2/9wyayia4mq5u0w/run' \
 
 Request format: `{"input":{"workflow":{...},"images":[{"name":"reference.png","image":"BASE64"}]}}`. The website may instead send HTTPS signed image URLs. Each loaded image filename must match its upload name.
 
-Outputs use the official RunPod worker image format: `output.images[]` with `filename`, `type: "base64"` and `data`. The website displays and downloads these outputs through its existing result/history path.
+Outputs use `output.images[]`. The website signs an individual PUT/GET object pair per image in `input.qwen21_output_uploads`; the worker uploads the original PNG bytes and returns `filename`, `type: "url"`, `data`, `url`, `size` and `mime_type`. The website uses its existing local output cache and signed-URL refresh path. No storage credential is placed in this repository or the container. A direct caller may omit upload grants for small base64 responses; a large result without grants fails explicitly rather than overflowing RunPod's result transport. This matters for SeedVR2 4K PNGs and character sheets.
+
+The website's VOSR2 graph splits RGB from alpha before inference, scales the opacity mask, then restores alpha. SeedVR2 natively preserves RGBA. Tests verify byte-preserving result uploads and rejection of mismatched object grants.
