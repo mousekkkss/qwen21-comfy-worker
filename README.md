@@ -8,7 +8,7 @@ The website keeps all four original editor JSON files and publishes API adaptati
 
 ## Deploy
 
-GitHub Actions publishes public images to `ghcr.io/mousekkkss/qwen21-comfy-worker`. Pin the published digest in RunPod. Configure an A40 (`AMPERE_48`) queue endpoint with 100 GB disk, min workers 0, max workers 1 and 120s idle timeout. The optional SeedVR2/VOSR2 nodes download their named upstream model files on first use.
+GitHub Actions publishes public images to `ghcr.io/mousekkkss/qwen21-comfy-worker`. Pin the published digest in RunPod. Configure an A100 SXM 80GB (`AMPERE_80`, excluding `NVIDIA A100 80GB PCIe`) queue endpoint with 100 GB disk, min workers 0, max workers 1 and 120s idle timeout. The deployment switched from A40 after repeated capacity throttling; live flex prices on 2026-09-27 were $2.72/hour for A100 and $1.22/hour for A40. A40 is compatible with the generation graphs and both upscalers, but availability must be checked before selecting it. The optional SeedVR2/VOSR2 nodes download their named upstream model files on first use.
 
 Website routing lives in `qwen21-endpoint-router.js` and the ignored `qwen21-endpoint.local.json`, reusing the API key from `local-runpod.config.json`. The frontend never receives the key. The endpoint's startup health can be checked with `input.mode = qwen21_health`, which returns the registered schemas of the required nodes. A health response does not replace a generation test.
 
