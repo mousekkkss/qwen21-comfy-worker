@@ -15,6 +15,7 @@ RUN git -C /comfyui fetch --depth 1 origin "$COMFYUI_REF" \
 COPY qwen21_nodes.py /comfyui/custom_nodes/qwen21_nodes.py
 COPY official_handler.py /handler.py
 COPY worker.py /qwen21-worker.py
+COPY r2_models.py /qwen21_r2_models.py
 COPY bootstrap.py /bootstrap.py
 COPY models.json /models.json
 COPY start.sh /qwen21-start.sh

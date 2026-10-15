@@ -24,3 +24,18 @@ Request format: `{"input":{"workflow":{...},"images":[{"name":"reference.png","i
 Outputs use `output.images[]`. The website signs an individual PUT/GET object pair per image in `input.qwen21_output_uploads`; the worker uploads the original PNG bytes and returns `filename`, `type: "url"`, `data`, `url`, `size` and `mime_type`. The website uses its existing local output cache and signed-URL refresh path. No storage credential is placed in this repository or the container. A direct caller may omit upload grants for small base64 responses; a large result without grants fails explicitly rather than overflowing RunPod's result transport. This matters for SeedVR2 4K PNGs and character sheets.
 
 The website's VOSR2 graph splits RGB from alpha before inference, scales the opacity mask, then restores alpha. SeedVR2 natively preserves RGBA. Tests verify byte-preserving result uploads and rejection of mismatched object grants.
+
+## Optional R2 models (DiT, text encoder, LoRA)
+
+Besides the pinned base files, a request may name models stored in Cloudflare R2 (`rat-image-ai-models`, prefix `models/`, folder `Qwen Image`). The website signs one GET URL per file and sends `input.qwen21_model_plan`:
+
+```json
+{"provider":"cloudflare-r2","bucket":"rat-image-ai-models","prefix":"models","required":[
+  {"relativePath":"loras/Qwen Image/FlatAnime_Qwen_2.1.safetensors","sizeBytes":159436392,"sha256":"…","url":"https://<account>.r2.cloudflarestorage.com/rat-image-ai-models/models/loras/Qwen%20Image/FlatAnime_Qwen_2.1.safetensors?X-Amz-…"}]}
+```
+
+`r2_models.py` (installed as `/qwen21_r2_models.py`) accepts at most 12 `.safetensors` files under `diffusion_models/`, `text_encoders/` or `loras/`. Each URL must be HTTPS on `*.r2.cloudflarestorage.com`, address exactly `/<bucket>/<prefix>/<relativePath>` and carry an `X-Amz-Signature`. Size and SHA-256 from the R2 manifest are required. Files of 256 MiB and more download as 64 MiB ranges, 8 at a time (`QWEN21_R2_CONCURRENCY`). Each file is checked for size and SHA-256 before it is moved into `/comfyui/models/...`. A `.r2-verified.json` marker lets later jobs on the same worker reuse the file without downloading or hashing it again. If the disk is short, earlier R2 files that this job does not use are evicted, oldest first. The image holds no storage credential; `QWEN21_R2_BUCKETS` (default `rat-image-ai-models`) only restricts which bucket a plan may name. Hydration runs before the workflow is queued; the result lists the files under `qwen21_models` with `cached` and download seconds.
+
+The workflow refers to the files relative to their model folder, e.g. `UNETLoader.unet_name = "Qwen Image/NoctQA_V1_int8_convrot.safetensors"`. LoRAs are applied with `LoraLoaderModelOnly` between `UNETLoader` and `QwenImage21Cache`. At the pinned ComfyUI commit, the Qwen Image LoRA key map covers the three formats in the bucket: ai-toolkit `diffusion_model.*` (fused `img_mlp.gate_up`), FUSAL `transformer.*` and ModelScope PEFT `*.lora_A.default.weight` (both target `img_mlp.gate_layer`/`proj`, which ComfyUI maps onto halves of the fused weight). NoctQA has the same 649 tensors, dtypes and shapes as the official INT8 DiT. The heretic text encoder has the same 750 keys and shapes as the official `qwen3vl_8b_bf16.safetensors`, so `CLIPLoader(type=qwen_image)` loads it unchanged.
+
+Tests: `python -m unittest discover -s tests -v` covers plan validation (host, path, signature, folder, extension, size/hash), ranged download, hash mismatch cleanup, cache reuse, re-download after a hash change and eviction.

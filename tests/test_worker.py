@@ -16,7 +16,8 @@ class OutputTransportTest(unittest.TestCase):
         }))
         spec = importlib.util.spec_from_file_location('qwen_worker_test', Path(__file__).parents[1] / 'worker.py')
         self.worker = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'handler': self.official, 'requests': self.requests, 'runpod': types.SimpleNamespace()}):
+        self.r2 = types.SimpleNamespace(hydrate=Mock(return_value=[{'relativePath': 'loras/Qwen Image/a.safetensors', 'cached': False}]))
+        with patch.dict(sys.modules, {'handler': self.official, 'requests': self.requests, 'runpod': types.SimpleNamespace(), 'qwen21_r2_models': self.r2}):
             spec.loader.exec_module(self.worker)
 
     def job(self, uploads):
@@ -39,6 +40,18 @@ class OutputTransportTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'same HTTPS object'):
             self.worker.handler(self.job([{'put_url': 'https://example.com/a.png', 'get_url': 'https://example.com/b.png'}]))
         self.requests.put.assert_not_called()
+
+    def test_model_plan_hydrates_before_workflow(self):
+        order = []
+        self.r2.hydrate.side_effect = lambda plan: order.append('hydrate') or [{'relativePath': 'x', 'cached': True}]
+        self.official.handler.side_effect = lambda job: order.append('workflow') or {'images': []}
+        result = self.worker.handler({'input': {'qwen21_model_plan': {'provider': 'cloudflare-r2'}}})
+        self.assertEqual(order, ['hydrate', 'workflow'])
+        self.assertEqual(result['qwen21_models'], [{'relativePath': 'x', 'cached': True}])
+
+    def test_no_model_plan_skips_hydration(self):
+        self.worker.handler(self.job([]))
+        self.r2.hydrate.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 import requests
 import runpod
 import handler as official
+import qwen21_r2_models as r2_models
 
 
 def handler(job):
@@ -30,7 +31,10 @@ def handler(job):
             if len(response.content) > 32 * 1024 * 1024:
                 raise ValueError("Reference image exceeds 32 MiB")
             image["image"] = base64.b64encode(response.content).decode("ascii")
+    hydrated = r2_models.hydrate(data["qwen21_model_plan"]) if data.get("qwen21_model_plan") else []
     result = official.handler(job)
+    if hydrated and isinstance(result, dict):
+        result["qwen21_models"] = hydrated
     images = result.get("images", []) if isinstance(result, dict) else []
     grants = data.get("qwen21_output_uploads", [])
     if not images:
