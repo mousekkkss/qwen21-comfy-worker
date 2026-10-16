@@ -1,5 +1,7 @@
 # Rat Image AI — Qwen Image 2.1 Serverless
 
+> **Retired 2026-10-16.** Qwen Image 2.1 now runs on the main endpoint `satisfied_chocolate_mollusk` (`3rzjn4wbbf66bv`, repository `my-comfy-worker006671`) and loads its models from Cloudflare R2 through that worker's `model_storage` plan. Endpoint `9wyayia4mq5u0w` and template `5gxeancnud` were deleted. Before retirement, `r2_models.py` was verified live on A40: NoctQA + heretic bf16 + FUSAL LoRA hydrated from signed R2 URLs (job `3bb1045c-d8d1-4a32-ab1b-2371ea67bde5-e2`, 1024x1024, 199 s including downloads). This repository is kept for reference.
+
 Dedicated ComfyUI worker for the four Qwen 2.1 website modes. This repository is independent of the existing image/video/training worker.
 
 The workflow rides every request in `input.workflow`; no user workflow or reference image is baked into the image. ComfyUI is pinned to `4ef23c34d950eecc37040a21ee1741a49d2e44b1`. `models.json` pins the verified Comfy-Org Qwen 2.1 revision, filenames, file sizes and hashes. Startup downloads the INT8 DiT, INT8 Qwen3-VL encoder and BF16 VAE (17,283,091,112 bytes). Each worker caches these files on its ephemeral disk. A new worker downloads them again; no persistent network volume is billed.
